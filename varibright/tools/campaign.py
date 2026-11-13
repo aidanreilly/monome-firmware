@@ -7,6 +7,7 @@ usage:
   campaign.py response    frames with different loads: does the cycle average decide the lock?
   campaign.py step        scan rate right after a load change and later (electrical vs thermal)
   campaign.py range       capture range: sweep the period up and down through the lock at 3 loads
+  campaign.py switch      switch content and model period together: held from the first block? drift after?
   campaign.py target      hold the scan at 8 positions across a digit slot
   campaign.py thermal M   log the scan rate for M minutes under fixed load, then dark, then load
 Results go to varibright/sim/results/hw-2026-11-13/<name>.json.
@@ -145,9 +146,9 @@ def cmd_wake(g):
     print(f"  lock period ~ {b:.1f} + {k:.3f} * average lit LEDs (residual {np.std(y - (k * x + b)):.1f} ticks)")
 
 
-def range_scan(g, name, lv, centre, half=40, step=8, prehold=60):
+def range_scan(g, name, lv, centre, half=40, step=8, prehold=60, P=3):
     """Sweep the period up then down through centre; each point records creep, jumps, position."""
-    g.vbset(centre - half, 0, 0x30)
+    g.vbset(centre - half, 0, P << 4)
     g.intensity(15)
     g.pattern(lv)
     time.sleep(prehold)
@@ -155,12 +156,12 @@ def range_scan(g, name, lv, centre, half=40, step=8, prehold=60):
     res = []
     for direction, ps in (('up', sweep), ('down', sweep[::-1])):
         for q in ps:
-            g.vbset(q, 0, 0x30)
+            g.vbset(q, 0, P << 4)
             g.pattern(lv)
             time.sleep(0.3)
             blocks = parse_blocks(g.capture(255, ADC_LIVE | ADC_SLOW))
-            c = analysis.creep(blocks, TPS_SLOW, 3 * q, 3)
-            pos = analysis.position(blocks, TPS_SLOW, 3 * q, 3)
+            c = analysis.creep(blocks, TPS_SLOW, P * q, P)
+            pos = analysis.position(blocks, TPS_SLOW, P * q, P)
             held = analysis.steady(c) and pos['spread'] < 0.06
             res.append({'case': name, 'dir': direction, 'period': q, 'creep': c['creep'], 'jumps': c['jumps'],
                         'pos': pos['mean'], 'spread': pos['spread'], 'held': held})
@@ -179,14 +180,62 @@ def cmd_range(g):
         save('range', res)
 
 
+def cmd_range2(g):
+    """Capture range with P = 2 (the 3-level fallback): is the window wider?"""
+    res = []
+    for n, centre in ((0, 18775), (6, 18903)):
+        res += range_scan(g, f"P2_load{n}", marker_load(n), centre, P=2)
+        save('range_p2', res)
+
+
 def cmd_response(g):
-    """Same 18.7-LED cycle average, spread differently: does the window follow the average or each frame?"""
-    heavy_frame = [[1] * 8 if x < 7 else [0] * 8 for x in range(8)]     # 56 LEDs in frame 0, none in 1 and 2
-    uniform = marker_load(2)                                             # 16 LEDs every frame plus marker
-    res = range_scan(g, 'frame0_heavy', heavy_frame, 18820, half=48, step=6)
-    save('response', res)
-    res += range_scan(g, 'uniform', uniform, 18820, half=48, step=6)
-    save('response', res)
+    """Uneven frames vs uniform: does the capture window follow the cycle-average load or each frame?
+
+    uneven: columns 0..3 at step 2 (lit in frames 0 and 1, 32 LEDs; frame 2 dark), average 21.3.
+    The compact block carries the scan position itself. The uniform reference (marker_load(2),
+    average 18.7) is in response.json from the first run: held at 18808..18820."""
+    uneven = [[8] * 8 if x < 4 else [0] * 8 for x in range(8)]
+    res = range_scan(g, 'uneven_step2', uneven, 18821, half=48, step=6)
+    save('response_uneven', res)
+
+
+def model_period(avg_leds):
+    """Capture-window centre from the range and response sweeps (warm unit, 2026-11-13)."""
+    return int(round(18775 + 2.7 * (avg_leds - 8 / 3)))
+
+
+def held_report(blocks, q):
+    c = analysis.creep(blocks, TPS_SLOW, 3 * q, 3)
+    idx, pos, _ = analysis._block_positions(blocks, TPS_SLOW, 3 * q, 3)
+    first = pos[:8]
+    return c, {'creep': c['creep'], 'jumps': c['jumps'], 'pos_first8': [round(float(v), 3) for v in first],
+               'spread': analysis.position(blocks, TPS_SLOW, 3 * q, 3)['spread']}
+
+
+def cmd_switch(g):
+    """Content and model period change together. Is the scan held from the first block, and does
+    self-heating then walk the window away from the period?"""
+    res = []
+    light, heavy = marker_load(0), marker_load(6)
+    pl, ph = model_period(8 / 3), model_period(48 + 8 / 3)
+    for name, a, pa, b, pb in (('light_to_heavy', light, pl, heavy, ph), ('heavy_to_light', heavy, ph, light, pl)):
+        g.vbset(pa, 0, 0x30)
+        g.intensity(15)
+        g.pattern(a)
+        time.sleep(60)
+        t0 = time.time()
+        g.vbset(pb, 0, 0x30)
+        g.pattern(b)
+        for when in (0, 20, 60):
+            while time.time() - t0 < when:
+                time.sleep(0.2)
+            t = time.time() - t0
+            c, r = held_report(parse_blocks(g.capture(255, ADC_LIVE | ADC_SLOW)), pb)
+            r.update({'case': name, 't': t, 'period': pb})
+            res.append(r)
+            print(f"  {name} t {t:5.1f} s period {pb}: creep {c['creep']:+.5f} jumps {c['jumps']:3d} "
+                  f"spread {r['spread']:.3f} first positions {r['pos_first8']}", flush=True)
+        save('switch', res)
 
 
 def cmd_step(g):
@@ -262,6 +311,6 @@ def cmd_thermal(g, minutes):
 if __name__ == '__main__':
     a = sys.argv[1:]
     g = Grid()
-    {'load': cmd_load, 'wake': cmd_wake, 'range': cmd_range, 'response': cmd_response, 'step': cmd_step,
+    {'load': cmd_load, 'wake': cmd_wake, 'range': cmd_range, 'range2': cmd_range2, 'switch': cmd_switch, 'response': cmd_response, 'step': cmd_step,
      'target': cmd_target}.get(a[0] if a else '', lambda g: None)(g) if a and a[0] != 'thermal' \
         else (cmd_thermal(g, float(a[1])) if a else print(__doc__))
