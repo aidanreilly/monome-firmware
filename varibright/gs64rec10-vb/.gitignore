@@ -1,0 +1,7 @@
+*.o
+*.map
+*.lst
+64.elf
+64vb.elf
+64vb.hex
+64vb-sim.elf

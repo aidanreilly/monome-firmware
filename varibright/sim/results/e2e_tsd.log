@@ -1,0 +1,58 @@
+TIMER: avr_timer_write_ocr-1 mode 0 UNSUPPORTED
+== libmonome end-to-end, mode tsd, model f_s 800 Hz (simulation only)
+ok   firmware runs shutdown-bracketed frames after boot
+     period 20687 ticks, dark 687 cycles, model f_s 800.000 Hz, awake 0.9668, 4 frames
+ok   monome_open (serial m0000064) -> handshake completed
+ok   libmonome chose protocol 'mext' from the serial
+ok   grid size 8x8
+ok   id 'monome 64'
+ok   handshake needed 1 query round(s)
+ok   no stray device bytes after the handshake
+ok   monome_led_all(0)                              worst |measured - expected| 0.00 % of stock at (0,0): level 0 measured 0.000 expected 0.000
+ok   monome_led_all(1)                              worst |measured - expected| 0.33 % of stock at (7,0): level 15 measured 1.003 expected 1.000
+ok   monome_led_on / monome_led_off                 worst |measured - expected| 0.19 % of stock at (7,7): level 15 measured 0.998 expected 1.000
+ok   monome_led_map                                 worst |measured - expected| 0.33 % of stock at (4,4): level 15 measured 1.003 expected 1.000
+ok   monome_led_row                                 worst |measured - expected| 0.33 % of stock at (6,2): level 15 measured 1.003 expected 1.000
+ok   monome_led_col                                 worst |measured - expected| 0.33 % of stock at (0,0): level 15 measured 1.003 expected 1.000
+ok   monome_led_level_set x 64 (all 16 levels)      worst |measured - expected| 0.51 % of stock at (3,1): level 11 measured 0.755 expected 0.750
+ok   monome_led_level_all(0)                        worst |measured - expected| 0.00 % of stock at (0,0): level 0 measured 0.000 expected 0.000
+ok   monome_led_level_all(1)                        worst |measured - expected| 0.34 % of stock at (0,0): level 1 measured 0.253 expected 0.250
+ok   monome_led_level_all(2)                        worst |measured - expected| 0.34 % of stock at (2,0): level 2 measured 0.253 expected 0.250
+ok   monome_led_level_all(3)                        worst |measured - expected| 0.34 % of stock at (6,0): level 3 measured 0.253 expected 0.250
+ok   monome_led_level_all(4)                        worst |measured - expected| 0.34 % of stock at (6,0): level 4 measured 0.253 expected 0.250
+ok   monome_led_level_all(5)                        worst |measured - expected| 0.34 % of stock at (1,0): level 5 measured 0.253 expected 0.250
+ok   monome_led_level_all(6)                        worst |measured - expected| 0.35 % of stock at (0,0): level 6 measured 0.496 expected 0.500
+ok   monome_led_level_all(7)                        worst |measured - expected| 0.35 % of stock at (2,0): level 7 measured 0.496 expected 0.500
+ok   monome_led_level_all(8)                        worst |measured - expected| 0.35 % of stock at (4,0): level 8 measured 0.496 expected 0.500
+ok   monome_led_level_all(9)                        worst |measured - expected| 0.35 % of stock at (5,0): level 9 measured 0.496 expected 0.500
+ok   monome_led_level_all(10)                       worst |measured - expected| 0.21 % of stock at (6,0): level 10 measured 0.752 expected 0.750
+ok   monome_led_level_all(11)                       worst |measured - expected| 0.51 % of stock at (7,0): level 11 measured 0.755 expected 0.750
+ok   monome_led_level_all(12)                       worst |measured - expected| 0.51 % of stock at (2,0): level 12 measured 0.755 expected 0.750
+ok   monome_led_level_all(13)                       worst |measured - expected| 0.51 % of stock at (4,0): level 13 measured 0.755 expected 0.750
+ok   monome_led_level_all(14)                       worst |measured - expected| 0.33 % of stock at (6,0): level 14 measured 1.003 expected 1.000
+ok   monome_led_level_all(15)                       worst |measured - expected| 0.33 % of stock at (0,0): level 15 measured 1.003 expected 1.000
+ok   monome_led_level_map (random)                  worst |measured - expected| 0.51 % of stock at (3,0): level 10 measured 0.755 expected 0.750
+ok   monome_led_level_row                           worst |measured - expected| 0.51 % of stock at (5,0): level 13 measured 0.755 expected 0.750
+ok   monome_led_level_col                           worst |measured - expected| 0.34 % of stock at (1,0): level 4 measured 0.253 expected 0.250
+ok   monome_led_intensity(7) with all levels        worst |measured - expected| 0.17 % of stock at (0,1): level 8 measured 0.240 expected 0.242
+ok   monome_led_intensity(3) with all levels        worst |measured - expected| 0.12 % of stock at (2,1): level 10 measured 0.168 expected 0.169
+ok   monome_led_intensity(15) with all levels       worst |measured - expected| 0.53 % of stock at (3,1): level 11 measured 0.745 expected 0.750
+ok   rotation 0: level_map == 64 x level_set
+ok   rotation 0: device LED (x,y) shows host (x,y)
+ok   rotation 0: level_row == 8 x level_set
+ok   rotation 0: level_col == 8 x level_set
+ok   rotation 90: level_map == 64 x level_set
+ok   rotation 90: level_row == 8 x level_set
+ok   rotation 90: level_col == 8 x level_set
+ok   rotation 180: level_map == 64 x level_set
+ok   rotation 180: level_row == 8 x level_set
+ok   rotation 180: level_col == 8 x level_set
+ok   rotation 270: level_map == 64 x level_set
+ok   rotation 270: level_row == 8 x level_set
+ok   rotation 270: level_col == 8 x level_set
+ok   64 keys: 64 down and 64 up events decoded by libmonome
+ok   rotation 90: key (1,2) reported as (5,1); setting that LED lights device LED (1,2)
+ok   tilt enabled: 1 events, last x 25 y -26 (expected about 25 -26)
+ok   tilt disabled: 0 events after the input changed
+ok   harness protocol warnings: 0
+E2E tsd PASSED: 54 checks, 0 failed

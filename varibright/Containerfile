@@ -1,0 +1,21 @@
+# AVR toolchain for building the gs64rec10 varibright firmware (64vb.hex).
+#
+# Build the image once, from this directory:
+#   podman build -t gs64-avr .
+#
+# Build the firmware, from varibright/gs64rec10-vb:
+#   podman run --rm -v "$PWD":/src:Z gs64-avr
+#
+# Pass your own make arguments to override the default, for example:
+#   podman run --rm -v "$PWD":/src:Z gs64-avr make vb-clean vb VBFLAGS="-std=gnu11 -DVB_TILT=0"
+
+FROM registry.fedoraproject.org/fedora:44
+
+RUN dnf -y install avr-gcc avr-libc avr-binutils make \
+ && dnf clean all
+
+WORKDIR /src
+
+# avr-gcc 15 defaults to C23, where bool is a keyword and types.h fails to
+# compile. gnu11 matches the avr-gcc 7.3 default the firmware was written for.
+CMD ["make", "vb-clean", "vb", "VBFLAGS=-std=gnu11"]

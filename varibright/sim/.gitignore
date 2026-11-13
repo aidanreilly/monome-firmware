@@ -1,0 +1,7 @@
+build/
+__pycache__/
+results/quick/
+results/quick.log
+results/full2.log
+results/full.log
+results/fw_tests.log

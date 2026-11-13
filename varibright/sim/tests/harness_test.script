@@ -1,0 +1,9 @@
+# harness self-test script (times in ms of simulated time)
+@2    mark start
+@5    host 01 02 03 fe
+@10   key 2 5 down
+@25   key 2 5 up
+@30   host ee
+@40   eedump 0 8
+@45   pwren 1
+@46   mark end
