@@ -39,19 +39,62 @@ def scan_rate(blocks, tps, lo=500.0, hi=1300.0, digit=False):
     return f0 / m
 
 
-def _block_positions(blocks, tps, cycle_ticks, nf):
-    """Per block: phase of the frame-cycle fundamental, as a position in frames.
+def _window_cycles(cycle_ticks, tps, nmin, nmax):
+    """Whole cycles per window such that the window also holds a near-whole number of samples.
 
-    Linear (no clipping) and over the whole block, so content lit equally in every
-    frame cancels and only frame-to-frame differences (the marker) remain.
-    Returns arrays (index, position_frames, weight)."""
-    idx, pos, wt = [], [], []
+    The sampling grid then covers every frame of the cycle at evenly spread sub-sample
+    offsets, so a timer-locked feature narrower than the sample spacing lands equally in
+    each frame and cancels (otherwise its sampling pattern beats against the cycle)."""
+    n = np.arange(nmin, max(nmin, nmax) + 1)
+    s = n * cycle_ticks / tps
+    return int(n[np.argmin(np.abs(s - np.round(s)))])
+
+
+def _block_positions(blocks, tps, cycle_ticks, nf):
+    """Phase of the frame-cycle fundamental, as a position in frames, one estimate per block.
+
+    Each estimate is linear (no clipping) over a window of whole cycles that starts in the
+    block and runs on through following consecutive blocks (see _window_cycles), so content
+    identical in every frame (columns lit in every frame, the firmware's shutdown dip at
+    each tick) cancels and only frame-to-frame differences (the marker) remain. Where the
+    run of consecutive blocks is too short, the window is the whole cycles inside the run.
+    Edge samples are weighted by their overlap with the window.
+    Returns arrays (index, position_frames, weight); index is the window centre in blocks."""
+    tps = float(tps)
+    bt = 256 * tps
+    blocks = sorted(blocks, key=lambda ib: ib[0])
+    runs, cur = [], []
     for i, b in blocks:
-        tick = (i * 256 + np.arange(256)) * float(tps)
-        z = ((b - b.mean()) * np.exp(2j * np.pi * (tick % cycle_ticks) / cycle_ticks)).sum()
-        idx.append(i)
-        pos.append(np.angle(z) / (2 * np.pi) % 1 * nf)
-        wt.append(abs(z))
+        if cur and i != cur[-1][0] + 1:
+            runs.append(cur)
+            cur = []
+        cur.append((i, np.asarray(b, float)))
+    if cur:
+        runs.append(cur)
+    cpb = bt / cycle_ticks
+    nwin = _window_cycles(cycle_ticks, tps, int(np.ceil(cpb)), int(3 * cpb))
+    idx, pos, wt = [], [], []
+    for run in runs:
+        i0 = run[0][0]
+        x = np.concatenate([b for _, b in run])
+        tick = (i0 * 256 + np.arange(len(x))) * tps
+        end = tick[-1] + tps / 2
+        for i, _ in run:
+            t0 = i * bt - tps / 2
+            lo = np.ceil(t0 / cycle_ticks) * cycle_ticks
+            hi = lo + nwin * cycle_ticks
+            if hi > end:
+                hi = np.floor(end / cycle_ticks) * cycle_ticks
+                if i != i0 or hi <= lo:
+                    continue              # covered by an earlier window, or no whole cycle
+            w = np.clip(np.minimum(tick + tps / 2, hi) - np.maximum(tick - tps / 2, lo), 0, tps) / tps
+            m = w > 0
+            ww, v, t = w[m], x[m], tick[m]
+            v = v - (ww * v).sum() / ww.sum()
+            z = (ww * v * np.exp(2j * np.pi * (t % cycle_ticks) / cycle_ticks)).sum()
+            idx.append((lo + hi) / 2 / bt)
+            pos.append(np.angle(z) / (2 * np.pi) % 1 * nf)
+            wt.append(abs(z))
     order = np.argsort(idx)
     return np.array(idx)[order], np.array(pos)[order], np.array(wt)[order]
 
@@ -83,7 +126,7 @@ def creep(blocks, tps, cycle_ticks, nf):
 def position(blocks, tps, cycle_ticks, nf):
     """Scan position (frame-cycle fundamental phase, in frames). Returns {'mean', 'spread', 'drift'}."""
     idx, pos, _ = _block_positions(blocks, tps, cycle_ticks, nf)
-    t = (idx * 256 + 128) * float(tps) / 16e6
+    t = idx * 256 * float(tps) / 16e6
     un = np.unwrap(pos * 2 * np.pi / nf) * nf / (2 * np.pi)
     fit = np.polyfit(t, un, 1)
     return {'mean': float(un.mean() % nf), 'spread': float(np.std(un - np.polyval(fit, t))),
