@@ -134,7 +134,8 @@
 #define _SYS_GET_GRID_SIZE 0x05
 #define _SYS_VB_GET 0x0A          /* extension, never sent by libmonome */
 #define _SYS_VB_SET 0x0B          /* extension, never sent by libmonome */
-#define VB_SET_KEY 0xA5           /* first payload byte of a valid 0x0B */
+#define VB_SET_KEY 0xA5           /* first payload byte of a valid 0x0B / 0x0C */
+#define _SYS_ADC_CAPTURE 0x0C     /* extension: supply-ripple capture, see adc_capture() */
 
 #define _LED_SET0 0x10
 #define _LED_SET1 0x11
@@ -178,7 +179,7 @@
    outgoing_payload_lengths[addr][cmd]. Every header libmonome does not
    list is a lone byte there (payload 0), and is consumed as such here. */
 static const uint8_t len_sys[16] PROGMEM = {
-	1, 1, 33, 1,  4, 1, 3, 1,  3, 1, 1, 6,  1, 1, 1, 1    /* 0x0A/0x0B: ext. */
+	1, 1, 33, 1,  4, 1, 3, 1,  3, 1, 1, 6,  5, 1, 1, 1    /* 0x0A..0x0C: ext. */
 };
 static const uint8_t len_led[16] PROGMEM = {
 	3, 3, 1, 1,  11, 4, 4, 2,  4, 2, 35, 7,  7, 1, 1, 1
@@ -1122,6 +1123,97 @@ ISR(KEY_TIMER_vect)
 
 
 /* ===================================================================
+   supply-ripple capture (experiment: find the MAX7219 scan rate with no
+   test equipment). The columns in `cols` are lit at full intensity, so
+   the chip draws a current pulse once per scan cycle. The ADC runs free
+   on channel `mux` (0x1E = internal 1.1 V bandgap) against the same AREF
+   reference the tilt code uses, so a supply dip shows as a reading
+   change. 16 MHz / 64 / 13 cycles = 19230.77 samples/s, 10 bits.
+
+   Stream: per block, a marker 0xC0 | (block & 0x1F), then 256 samples
+   as two bytes each: 0x80 | (v >> 5), then v & 0x1F. End marker 0xFE.
+   Sample bytes never fall in 0xC0..0xFF, so the host can resync and
+   count dropped bytes. Blocking; host input stays in the FT245 FIFO.
+
+   mux bit 7 (ADC_LIVE): leave the display and frame timer running and
+   ignore `cols`, to measure the running display (flicker). mux bit 6
+   (ADC_SLOW): ADC clock /128, 9615.38 samples/s. Use it with ADC_LIVE:
+   one sample then takes 104 us, longer than the frame ISR (62.1 us), so
+   the main loop cannot miss a sample while the ISR runs.
+   mux bit 5 (ADC_DEC8): send the sum of each 8 consecutive samples
+   instead of every sample (13 bits: 0x80 | (sum >> 7), then sum & 0x7F).
+   1/8 the data rate, so the FT245 link keeps up with no gaps.
+   =================================================================== */
+#define ADC_LIVE 0x80
+#define ADC_SLOW 0x40
+#define ADC_DEC8 0x20
+static void adc_capture(uint8_t cols, uint8_t mux, uint8_t nblk)
+{
+	uint8_t d, blk, i;
+	uint16_t v;
+
+	if (!(mux & ADC_LIVE)) {
+		timer1_stop();
+		to_led(MAX_TEST, 0);
+		to_led(MAX_SCANLIMIT, 7);
+		to_led(MAX_DECODE, 0);
+		to_led(MAX_INTENSITY, 15);
+		for (d = 0; d < 8; d++) to_led(MAX_DIGIT0 + d, (cols >> d) & 1 ? 0xFF : 0x00);
+		to_led(MAX_SHUTDOWN, 1);
+	}
+	out_flush();
+
+	ADCSRA = 0;
+	ADMUX = mux & 0x1F;                 /* REFS = 00 (AREF), right adjusted */
+	ADCSRB = 0;                         /* free running */
+	ADCSRA = (1 << ADEN) | (1 << ADATE) | (1 << ADIF) | (1 << ADPS2) | (1 << ADPS1)
+	       | ((mux & ADC_SLOW) ? (1 << ADPS0) : 0);
+	ADCSRA |= (1 << ADSC);
+	_delay_ms(20);                      /* settle: mux, bandgap, display */
+
+	PORTD = 0;
+	DDRD = 0xFF;
+	ADCSRA |= (1 << ADIF);              /* drop the pending sample */
+	for (blk = 0; blk < nblk; blk++) {
+		PORTC |= C2_WR; PORTD = 0xC0 | (blk & 0x1F); PORTC &= ~C2_WR;
+		i = 0;
+		do {
+			if (mux & ADC_DEC8) {
+				v = 0;
+				for (d = 0; d < 8; d++) {
+					while (!(ADCSRA & (1 << ADIF))) ;
+					v += ADCW;
+					ADCSRA |= (1 << ADIF);
+				}
+				PORTC |= C2_WR; PORTD = 0x80 | (uint8_t)(v >> 7); PORTC &= ~C2_WR;
+				PORTC |= C2_WR; PORTD = (uint8_t)(v & 0x7F);      PORTC &= ~C2_WR;
+				continue;
+			}
+			while (!(ADCSRA & (1 << ADIF))) ;
+			v = ADCW;
+			ADCSRA |= (1 << ADIF);
+			PORTC |= C2_WR; PORTD = 0x80 | (uint8_t)(v >> 5); PORTC &= ~C2_WR;
+			PORTC |= C2_WR; PORTD = (uint8_t)(v & 0x1F);      PORTC &= ~C2_WR;
+		} while (++i);
+	}
+	PORTC |= C2_WR; PORTD = 0xFE; PORTC &= ~C2_WR;
+	DDRD = 0;
+
+	/* restore the tilt ADC setup and the display */
+	ADCSRA = 0;
+	ADMUX = (1 << MUX0);
+	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+#if VB_TILT
+	if (tilt_on) tilt_enable(1);
+#endif
+	if (mux & ADC_LIVE) return;         /* display was never touched */
+	display_start(g_int);
+	intensity_apply(g_int, 1);
+	mono_dirty = 1;
+}
+
+
+/* ===================================================================
    command handling. Offsets follow monome/mk: an offset selects the
    8x8 quadrant (offset >> 3); this unit only has quadrant 0, other
    quadrants are ignored.
@@ -1173,6 +1265,10 @@ static void handle_packet(const uint8_t *rx)
 		out_vb_report();
 		break;
 	}
+
+	case _SYS_ADC_CAPTURE:              /* [0xA5, cols, mux, nblk] */
+		if (rx[1] == VB_SET_KEY && rx[4]) adc_capture(rx[2], rx[3], rx[4]);
+		break;
 
 	case _LED_SET0:
 	case _LED_SET1:                     /* [x, y] */
