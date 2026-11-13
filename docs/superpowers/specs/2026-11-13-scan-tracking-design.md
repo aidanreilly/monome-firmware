@@ -1,5 +1,7 @@
 # Scan tracking for the gs64rec10 varibright firmware
 
+**Status (2026-11-13): failed and scrapped.** See [the measurements](2026-11-13-scan-tracking-measurements.md) for the verdict.
+
 ## Intent
 
 The gs64rec10 monome 64 runs live music apps (Max/MSP patches, norns scripts and similar) through serialosc as a varibright grid.

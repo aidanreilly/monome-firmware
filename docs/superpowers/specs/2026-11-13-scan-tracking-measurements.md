@@ -2,7 +2,7 @@
 
 These are the measurements the scan tracking design depends on, taken on the real gs64rec10 unit on 2026-11-13 with the `0x0C` ADC capture and `varibright/tools/campaign.py`.
 Raw results are in `varibright/sim/results/hw-2026-11-13/`.
-The gate verdict is open: it needs the cold-start thermal run, which requires an owner power cycle.
+The project failed its gate and was scrapped (see "Verdict").
 
 ## Capture range (pull-in)
 
@@ -46,8 +46,20 @@ Per-block positions alternated under load because of timer-locked content (the s
 Positions now come from windows of whole cycles that also span a near-whole number of samples (15 cycles at period 18821).
 Content that fills most of one frame (for example 7 of 8 columns lit in one frame only) carries no usable position, and the meter reports it as held at every period.
 
-## Gate status
+## Cold start (partial)
 
-- Steady state: the load model lands inside the window with margin.
-- After a content change: the window moves out of reach for 20 to 60 s or more. Steadiness from the first frame requires the firmware to predict the thermal offset from load history to within about ±8 ticks, or to track it with the in-window position faster than it moves.
-- Still to measure: the cold-start run (30 minutes unplugged, then `campaign.py thermal 40`), which gives the heating and cooling time constants and the power-up period.
+The cold-start run was stopped after 2 points when the project ended.
+After 30 minutes unplugged, the 1-column free-running rate was 884.81 Hz at 0.1 min and 883.09 Hz at 0.7 min under a 4-column load.
+That is a drop of 1.7 Hz (about 35 ticks of lock period) in the first 40 s after power-up.
+
+## Verdict: failed, varibright scrapped
+
+The owner ended the project on 2026-11-13, before the thermal model was fitted.
+The decisive findings:
+
+- The lock window is about ±8 ticks of 18,800 (±0.04%). The MAX7219 scan comes from an internal RC oscillator, and 0.04% is in the range of a degree or two of die temperature or a small supply change, so open-loop prediction cannot hold it.
+- After every content change, and in the first minute after power-up, the window moves by 35 to 50 ticks. That breaks the owner's requirement of a steady display from the first frame unless feedback can correct faster than the chip heats or cools, which no measurement here supports.
+- The 3-level fallback (P = 2) has windows no wider than P = 3, so it does not rescue the bar.
+- Scaling is poor even if one unit could be made to work. The constants are per chip, clone drivers might not pull in at all, and the 128 and 256 editions drive 2 or 4 MAX7219s with independent oscillators from one frame timer.
+
+The unit was restored to its stock firmware, stock EEPROM and stock FTDI EEPROM from `varibright/backup/` (not committed).

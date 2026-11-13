@@ -1,5 +1,7 @@
 # Scan tracking implementation plan
 
+**Status (2026-11-13): stopped at the Task 2 gate. The project failed and was scrapped.** See [the measurements](../specs/2026-11-13-scan-tracking-measurements.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Keep the gs64rec10 varibright display locked to the MAX7219 scan under changing content, warm-up and dark stretches, so 4 levels (or the 3-level fallback) are steady from the first frame.
