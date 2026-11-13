@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# AVR build outputs (prebuilt .hex files and the extensionless ELF binaries are tracked on purpose)
+*.o
+*.elf
+*.map
+*.lst
+*.lss
+*.sym
+*.eep
+
+# Local dumps of the unit's stock flash, EEPROM and FTDI EEPROM
+varibright/backup/
